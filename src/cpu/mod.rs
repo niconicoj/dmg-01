@@ -1,3 +1,4 @@
+mod load_16bit;
 mod load_8bit;
 
 struct Register;
@@ -7,6 +8,7 @@ impl Register {
     const C: usize = 0b001;
     const D: usize = 0b010;
     const E: usize = 0b011;
+    const F: usize = 0b110;
     const H: usize = 0b100;
     const L: usize = 0b101;
 }
@@ -70,6 +72,8 @@ impl CPU {
             (0b00, 0b111, 0b010) => self.ld_a_hld(),
             (0b00, 0b100, 0b010) => self.ld_hli_a(),
             (0b00, 0b110, 0b010) => self.ld_hld_a(),
+            (0b00, 0b001, 0b000) => self.ld_nn_sp(),
+            (0b00, dd   , 0b001) if (dd % 2 == 0) => self.ld_dd_nn(dd >> 1),
             (0b00, _    , 0b110) => self.ld_r_n(x),
             (0b01, 0b110, 0b110) => self.halt(),
             (0b01, _    , 0b110) => self.ld_r_hl(x),
@@ -81,6 +85,10 @@ impl CPU {
             (0b11, 0b100, 0b000) => self.ld_n_a(),
             (0b11, 0b111, 0b010) => self.ld_a_nn(),
             (0b11, 0b101, 0b010) => self.ld_nn_a(),
+            (0b11, 0b111, 0b000) => self.ldhl_sp_e(),
+            (0b11, 0b111, 0b001) => self.ld_sp_hl(),
+            (0b11, qq   , 0b101) if (qq % 2 == 0) => self.push_qq(qq >> 1),
+            (0b11, qq   , 0b001) if (qq % 2 == 0) => self.pop_qq(qq >> 1),
             _ => todo!("instruction {:08b} not yet supported", opcode)
         };
     }
@@ -89,5 +97,21 @@ impl CPU {
 
     fn halt(&mut self) {
         todo!("halt")
+    }
+
+    fn half_carry(a: u8, b: u8, result: u8) -> bool {
+        (a ^ b ^ result) & 0x10 != 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn half_carry_tests() {
+        assert_eq!(CPU::half_carry(0x25, 0x48, 0x6D), false);
+        assert_eq!(CPU::half_carry(0x39, 0x48, 0x81), true);
+        assert_eq!(CPU::half_carry(0x72, 0x73, 0xE5), false);
     }
 }
