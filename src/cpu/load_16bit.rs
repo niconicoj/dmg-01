@@ -5,21 +5,21 @@ impl CPU {
     pub fn ld_dd_nn(&mut self, dd: u8) {
         match dd {
             0b00 => {
-                self.registers[Register::B] = self.memory[self.program_counter as usize];
-                self.registers[Register::C] = self.memory[(self.program_counter as usize) + 1];
+                self.registers[Register::B] = self.mmu.rb(self.program_counter);
+                self.registers[Register::C] = self.mmu.rb(self.program_counter + 1);
             }
             0b01 => {
-                self.registers[Register::D] = self.memory[self.program_counter as usize];
-                self.registers[Register::E] = self.memory[(self.program_counter as usize) + 1];
+                self.registers[Register::D] = self.mmu.rb(self.program_counter);
+                self.registers[Register::E] = self.mmu.rb(self.program_counter + 1);
             }
             0b10 => {
-                self.registers[Register::H] = self.memory[self.program_counter as usize];
-                self.registers[Register::L] = self.memory[(self.program_counter as usize) + 1];
+                self.registers[Register::H] = self.mmu.rb(self.program_counter);
+                self.registers[Register::L] = self.mmu.rb(self.program_counter + 1);
             }
             0b11 => {
                 self.stack_pointer = u16::from_be_bytes([
-                    self.memory[self.program_counter as usize],
-                    self.memory[(self.program_counter as usize) + 1],
+                    self.mmu.rb(self.program_counter),
+                    self.mmu.rb(self.program_counter + 1),
                 ]);
             }
             _ => unreachable!(),
@@ -33,45 +33,53 @@ impl CPU {
     }
 
     pub fn push_qq(&mut self, qq: u8) {
+        self.stack_pointer -= 2;
         match qq {
             0b00 => {
-                self.memory[(self.stack_pointer - 1) as usize] = self.registers[Register::B];
-                self.memory[(self.stack_pointer - 2) as usize] = self.registers[Register::C];
+                self.mmu.ww(
+                    self.stack_pointer,
+                    u16::from_be_bytes([self.registers[Register::C], self.registers[Register::B]]),
+                );
             }
             0b01 => {
-                self.memory[(self.stack_pointer - 1) as usize] = self.registers[Register::D];
-                self.memory[(self.stack_pointer - 2) as usize] = self.registers[Register::E];
+                self.mmu.ww(
+                    self.stack_pointer,
+                    u16::from_be_bytes([self.registers[Register::E], self.registers[Register::D]]),
+                );
             }
             0b10 => {
-                self.memory[(self.stack_pointer - 1) as usize] = self.registers[Register::H];
-                self.memory[(self.stack_pointer - 2) as usize] = self.registers[Register::L];
+                self.mmu.ww(
+                    self.stack_pointer,
+                    u16::from_be_bytes([self.registers[Register::L], self.registers[Register::H]]),
+                );
             }
             0b11 => {
-                self.memory[(self.stack_pointer - 1) as usize] = self.registers[Register::A];
-                self.memory[(self.stack_pointer - 2) as usize] = self.registers[Register::F];
+                self.mmu.ww(
+                    self.stack_pointer,
+                    u16::from_be_bytes([self.registers[Register::F], self.registers[Register::A]]),
+                );
             }
             _ => unreachable!(),
         }
-        self.stack_pointer -= 2;
     }
 
     pub fn pop_qq(&mut self, qq: u8) {
         match qq {
             0b00 => {
-                self.registers[Register::C] = self.memory[self.stack_pointer as usize];
-                self.registers[Register::B] = self.memory[(self.stack_pointer + 1) as usize];
+                self.registers[Register::C] = self.mmu.rb(self.stack_pointer);
+                self.registers[Register::B] = self.mmu.rb(self.stack_pointer + 1);
             }
             0b01 => {
-                self.registers[Register::E] = self.memory[self.stack_pointer as usize];
-                self.registers[Register::D] = self.memory[(self.stack_pointer + 1) as usize];
+                self.registers[Register::E] = self.mmu.rb(self.stack_pointer);
+                self.registers[Register::D] = self.mmu.rb(self.stack_pointer + 1);
             }
             0b10 => {
-                self.registers[Register::L] = self.memory[self.stack_pointer as usize];
-                self.registers[Register::H] = self.memory[(self.stack_pointer + 1) as usize];
+                self.registers[Register::L] = self.mmu.rb(self.stack_pointer);
+                self.registers[Register::H] = self.mmu.rb(self.stack_pointer + 1);
             }
             0b11 => {
-                self.registers[Register::F] = self.memory[self.stack_pointer as usize];
-                self.registers[Register::A] = self.memory[(self.stack_pointer + 1) as usize];
+                self.registers[Register::F] = self.mmu.rb(self.stack_pointer);
+                self.registers[Register::A] = self.mmu.rb(self.stack_pointer + 1);
             }
             _ => unreachable!(),
         }
@@ -80,8 +88,7 @@ impl CPU {
 
     pub fn ldhl_sp_e(&mut self) {
         // types are strictly the same size so transmute seems just fine
-        let operand =
-            unsafe { std::mem::transmute::<u8, i8>(self.memory[self.program_counter as usize]) };
+        let operand = unsafe { std::mem::transmute::<u8, i8>(self.mmu.rb(self.program_counter)) };
 
         let (result, carry) = match operand.is_negative() {
             true => self
@@ -110,8 +117,8 @@ impl CPU {
 
     pub fn ld_nn_sp(&mut self) {
         self.stack_pointer = u16::from_be_bytes([
-            self.memory[self.program_counter as usize],
-            self.memory[(self.program_counter + 1) as usize],
+            self.mmu.rb(self.program_counter),
+            self.mmu.rb(self.program_counter + 1),
         ]);
         self.program_counter += 2;
     }
@@ -125,8 +132,8 @@ mod tests {
     fn ld_dd_nn_tests() {
         let mut cpu = CPU::default();
 
-        cpu.memory[0x0] = 0xCD;
-        cpu.memory[0x1] = 0x1F;
+        cpu.mmu.wb(0x0, 0xCD);
+        cpu.mmu.wb(0x1, 0x1F);
 
         let instruction = 0b00_100_001;
 
@@ -137,8 +144,8 @@ mod tests {
         assert_eq!(cpu.registers[Register::L], 0x1F);
         assert_eq!(cpu.program_counter, 2);
 
-        cpu.memory[0x2] = 0x57;
-        cpu.memory[0x3] = 0xD3;
+        cpu.mmu.wb(0x2, 0x57);
+        cpu.mmu.wb(0x3, 0xD3);
 
         // load into SP
         let instruction = 0b00_110_001;
@@ -172,8 +179,8 @@ mod tests {
         let instruction = 0b11_000_101;
         cpu.execute(instruction);
 
-        assert_eq!(cpu.memory[0x6], 0x47);
-        assert_eq!(cpu.memory[0x5], 0xA5);
+        assert_eq!(cpu.mmu.rb(0x6), 0x47);
+        assert_eq!(cpu.mmu.rb(0x5), 0xA5);
         assert_eq!(cpu.stack_pointer, 5);
     }
 
@@ -182,8 +189,8 @@ mod tests {
         let mut cpu = CPU::default();
 
         cpu.stack_pointer = 0x45B2;
-        cpu.memory[0x45B2] = 0x01;
-        cpu.memory[0x45B3] = 0xD5;
+        cpu.mmu.wb(0x45B2, 0x01);
+        cpu.mmu.wb(0x45B3, 0xD5);
 
         let instruction = 0b11_010_001;
         cpu.execute(instruction);
@@ -198,7 +205,7 @@ mod tests {
         let mut cpu = CPU::default();
 
         cpu.stack_pointer = 0x45B2;
-        cpu.memory[0x0] = 0x45;
+        cpu.mmu.wb(0x0, 0x45);
 
         let instruction = 0b11_111_000;
         cpu.execute(instruction);
@@ -209,7 +216,7 @@ mod tests {
         assert_eq!(cpu.program_counter, 0x1);
 
         cpu.stack_pointer = 0x0F2A;
-        cpu.memory[0x1] = 0xF5;
+        cpu.mmu.wb(0x1, 0xF5);
 
         let instruction = 0b11_111_000;
         cpu.execute(instruction);
@@ -224,8 +231,8 @@ mod tests {
     fn ld_nn_sp_tests() {
         let mut cpu = CPU::default();
 
-        cpu.memory[0x0] = 0x73;
-        cpu.memory[0x1] = 0xE1;
+        cpu.mmu.wb(0x0, 0x73);
+        cpu.mmu.wb(0x1, 0xE1);
 
         let instruction = 0b00_001_000;
         cpu.execute(instruction);

@@ -1,3 +1,5 @@
+use crate::mmu::MMU;
+
 mod load_16bit;
 mod load_8bit;
 
@@ -31,7 +33,7 @@ pub struct CPU {
     registers: [u8; 8],
     program_counter: u16,
     stack_pointer: u16,
-    memory: Vec<u8>,
+    mmu: MMU,
 }
 
 impl Default for CPU {
@@ -40,7 +42,7 @@ impl Default for CPU {
             registers: [0; 8],
             program_counter: 0,
             stack_pointer: 0,
-            memory: vec![0; 0xFFFF],
+            mmu: MMU::default(),
         }
     }
 }
@@ -49,9 +51,9 @@ impl CPU {
     pub fn run(&mut self) {
         // very naive main loop
         loop {
-            let current = self.program_counter as usize;
+            let current = self.program_counter;
             self.program_counter += 1;
-            self.execute(self.memory[current]);
+            self.execute(self.mmu.rb(current));
         }
     }
 
@@ -79,7 +81,7 @@ impl CPU {
             (0b01, _    , 0b110) => self.ld_r_hl(x),
             (0b01, 0b110, _    ) => self.ld_hl_r(y),
             (0b01, _    , _    ) => self.ld_rr(x, y),
-            // (0b11, 0b110, 0b010) => self.ld_a_c(),
+            // (0b11, 0b110, 0b010) => self.ld_a_c(), /* disabled on the gameboy cpu */
             (0b11, 0b100, 0b010) => self.ld_c_a(),
             (0b11, 0b110, 0b000) => self.ld_a_n(),
             (0b11, 0b100, 0b000) => self.ld_n_a(),
