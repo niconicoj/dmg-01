@@ -85,8 +85,8 @@ impl CPU {
             (0b01, 0b110, _    ) => self.ld_hl_r(y),
             (0b01, _    , _    ) => self.ld_rr(x, y),
             // (0b11, 0b110, 0b010) => self.ld_a_c(), /* disabled on the gameboy cpu */
-            (0b10, 0b000, r    ) => self.add_a_r(r),
             (0b10, 0b000, 0b110) => self.add_a_hl(),
+            (0b10, 0b000, r    ) => self.add_a_r(r),
             (0b11, 0b000, 0b110) => self.add_a_n(),
             (0b11, 0b100, 0b010) => self.ld_c_a(),
             (0b11, 0b110, 0b000) => self.ld_a_n(),
